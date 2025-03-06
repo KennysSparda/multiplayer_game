@@ -4,12 +4,16 @@ import network
 from player import Player
 from ui import create_menu
 
+# Dentro do seu código principal
 app = Ursina(borderless=False)
 
 # Variáveis globais
 player = None
 dragging = False
 mouse_offset = Vec2(0, 0)
+
+# Criando o chão
+chao = Entity(model='plane', scale=(100, 1, 100), color=color.gray, collider='box', position=(0, -1, 0))  # Chão fixo
 
 # Cria a UI de conexão
 ui_elements = create_menu()
