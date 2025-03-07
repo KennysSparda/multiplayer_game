@@ -1,3 +1,4 @@
+# main.py
 from ursina import *
 import pickle
 import network
@@ -28,7 +29,7 @@ def handle_connect():
     ip = ip_input.text
     port = int(port_input.text)
     if network.connect(ip, port):
-        player = Player(element='fire', position=(0, 0, 0))
+        player = Player(element='fire', network=network, position=(0, 0, 0))  # Passa network para Player
         menu_ui.enabled = False
 
 connect_button.on_click = handle_connect
@@ -36,32 +37,35 @@ connect_button.on_click = handle_connect
 def update():
     global dragging, mouse_offset, player
     if player and network.client_socket:
-        player_data = {'position': player.position, 'element': player.element}
+        player_data = {
+            'position': player.position, 
+            'rotation_y': player.controller.rotation_y,
+            'element': player.element
+        }
         try:
             network.client_socket.sendall(pickle.dumps(player_data))
         except Exception as e:
             print(f"Erro ao enviar dados: {e}")
 
+        current_ids = set(network.game_state.get('players', {}).keys())
+        existing_ids = set(network.other_players.keys())
+
         for pid, pdata in network.game_state.get('players', {}).items():
-            try:
-                if pid != network.client_socket.getsockname()[1]:
-                    if pid not in network.other_players:
-                        network.other_players[pid] = Entity(model='cube', color=color.blue)
-                    network.other_players[pid].position = pdata['position']
-            except Exception as e:
-                print(f"Erro ao atualizar jogador: {e}")
+            if pid != network.client_socket.getsockname()[1]:  # Evita atualizar a si mesmo
+                # Verifica se o servidor mandou uma posição válida antes de atualizar
+                if pdata['position'] == Vec3(0, 0, 0):
+                    continue  # Pula essa iteração se a posição for (0,0,0)
+                if pid not in network.other_players:
+                    network.other_players[pid] = Entity(model='cube', color=color.blue)
 
-    if dragging:
-        dx, dy = mouse.x - mouse_offset.x, mouse.y - mouse_offset.y
-        window.position += Vec2(dx, dy)
-        mouse_offset = Vec2(mouse.x, mouse.y)
+                # Aplica posição e rotação
+                network.other_players[pid].animate_position(pdata['position'], duration=0.1, curve=curve.linear)
 
-def input(key):
-    global dragging, mouse_offset
-    if key == 'left mouse down' and mouse.position.y > 0.45:
-        dragging = True
-        mouse_offset = Vec2(mouse.x, mouse.y)
-    elif key == 'left mouse up':
-        dragging = False
+                network.other_players[pid].rotation_y = pdata['rotation_y']  # Aplica a rotação
+
+        for pid in existing_ids - current_ids:
+            network.other_players[pid].remove()
+            del network.other_players[pid]
+
 
 app.run()

@@ -1,3 +1,4 @@
+# network.py
 import socket
 import threading
 import pickle
@@ -11,7 +12,6 @@ def connect(ip, port):
     try:
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         client_socket.connect((ip, port))
-        # Inicia a thread pra receber dados do servidor
         threading.Thread(target=receive_data, daemon=True).start()
         return True
     except Exception as e:
@@ -22,9 +22,17 @@ def receive_data():
     global game_state
     while True:
         try:
-            data = client_socket.recv(1024)
+            data = b""
+            while True:
+                packet = client_socket.recv(4096)  # Buffer maior
+                if not packet:
+                    break
+                data += packet
+                if len(packet) < 4096:
+                    break
+            
             if data:
                 game_state = pickle.loads(data)
-        except:
-            print('Conexão perdida com o servidor.')
+        except Exception as e:
+            print(f'Erro ao receber dados: {e}')
             break
